@@ -4,6 +4,8 @@
 #include <esp_system.h>
 #include <soc/soc_memory_types.h>
 
+#include <cmath>
+
 #include "eye_animation.h"
 
 static_assert(BOARD_ID == m5gfx::board_t::board_M5StopWatch,
@@ -61,7 +63,68 @@ void renderCartoonEye(const EyeState& eye) {
     canvas.fillCircle(irisX + irisRadius * 36 / 100,
                       irisY - irisRadius * 35 / 100,
                       irisRadius * 23 / 100, canvas.color565(239, 184, 184));
+}
 
+void renderRealisticEye(const EyeState& eye) {
+    const int width = canvas.width();
+    const int height = canvas.height();
+    const int cx = width / 2;
+    const int cy = height / 2;
+    const int radius = (width < height ? width : height) / 2;
+    canvas.fillScreen(TFT_BLACK);
+    for (int layer = 0; layer <= 24; ++layer) {
+        const int inset = radius * layer / 48;
+        canvas.fillCircle(cx - inset / 5, cy - inset / 4, radius - inset,
+                          canvas.color565(178 + layer * 3, 183 + layer * 3,
+                                          180 + layer * 3));
+    }
+
+    const int irisX = cx + static_cast<int>(eye.x * radius);
+    const int irisY = cy + static_cast<int>(eye.y * radius);
+    const int irisRadius = radius * 48 / 100;
+    const int pupilRadius = irisRadius * 38 / 100;
+    for (int layer = 0; layer <= 24; ++layer) {
+        canvas.fillCircle(irisX, irisY, irisRadius - irisRadius * layer / 32,
+                          canvas.color565(43 + layer * 2, 66 + layer * 3,
+                                          70 + layer * 3));
+    }
+    // Fixed iris-local spokes: no random sampling or frame-dependent shimmer.
+    for (int spoke = 0; spoke < 72; ++spoke) {
+        const float angle = spoke * 6.2831853f / 72;
+        const float dx = std::cos(angle);
+        const float dy = std::sin(angle);
+        const int outer = irisRadius * (88 + spoke % 7) / 100;
+        const int inner = pupilRadius + irisRadius * (spoke % 5) / 100;
+        const auto color = spoke % 3 == 0 ? canvas.color565(108, 145, 140)
+                                          : canvas.color565(67, 102, 105);
+        canvas.drawLine(irisX + static_cast<int>(dx * inner),
+                        irisY + static_cast<int>(dy * inner),
+                        irisX + static_cast<int>(dx * outer),
+                        irisY + static_cast<int>(dy * outer), color);
+    }
+    canvas.fillCircle(irisX, irisY, pupilRadius + radius / 100,
+                      canvas.color565(35, 49, 51));
+    canvas.fillCircle(irisX, irisY, pupilRadius, canvas.color565(8, 14, 18));
+    canvas.fillEllipse(irisX + irisRadius * 30 / 100,
+                       irisY - irisRadius * 34 / 100,
+                       irisRadius * 20 / 100, irisRadius * 14 / 100,
+                       canvas.color565(242, 248, 244));
+    canvas.fillCircle(irisX - irisRadius * 29 / 100,
+                      irisY + irisRadius * 30 / 100,
+                      irisRadius * 7 / 100, canvas.color565(184, 207, 208));
+}
+
+void renderEye(const EyeState& eye, EyeStyle style) {
+    if (style == EyeStyle::Cartoon) {
+        renderCartoonEye(eye);
+    } else {
+        renderRealisticEye(eye);
+    }
+    const int width = canvas.width();
+    const int height = canvas.height();
+    const int cx = width / 2;
+    const int cy = height / 2;
+    const int radius = (width < height ? width : height) / 2;
     const int aperture = static_cast<int>(radius * eye.openness);
     canvas.fillRect(0, 0, width, cy - aperture, TFT_BLACK);
     canvas.fillRect(0, cy + aperture, width, height - cy - aperture, TFT_BLACK);
@@ -107,7 +170,7 @@ void setup() {
     const std::uint32_t now = millis();
     animation = EyeAnimation(now, esp_random());
     lastFrame = now;
-    renderCartoonEye(animation.state());
+    renderEye(animation.state(), animation.style());
 }
 
 void loop() {
@@ -115,11 +178,15 @@ void loop() {
         return;
     }
     M5.update();
+    // Consume each release-click once, even when this loop skips rendering.
+    if (M5.BtnA.wasClicked()) {
+        animation.toggleStyle();
+    }
     const std::uint32_t now = millis();
     if (static_cast<std::uint32_t>(now - lastFrame) < frameInterval) {
         return;
     }
     lastFrame = now;
     animation.update(now);
-    renderCartoonEye(animation.state());
+    renderEye(animation.state(), animation.style());
 }
