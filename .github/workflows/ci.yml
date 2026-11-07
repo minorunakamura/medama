@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  host-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Compile and run host test
+        run: |
+          mkdir -p .test-output
+          clang++ -std=c++11 -Wall -Wextra -Werror -pedantic -Iinclude \
+            src/eye_animation.cpp tests/eye_animation_test.cpp \
+            -o .test-output/eye_animation_test
+          .test-output/eye_animation_test
+
+  firmware-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PLATFORMIO_CORE_DIR: ${{ github.workspace }}/.cache/platformio
+      PIP_NO_CACHE_DIR: '1'
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: '0.13.5'
+          python-version: '3.14'
+          enable-cache: false
+      - name: Prepare PlatformIO environment
+        run: |
+          uv --no-cache venv .venv
+          uv --no-cache pip install --python .venv/bin/python \
+            'platformio==6.1.19' 'pip==25.3'
+      - name: Build firmware
+        run: .venv/bin/pio run -e m5stack-stopwatch

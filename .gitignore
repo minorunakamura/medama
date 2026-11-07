@@ -1,0 +1,5 @@
+.venv/
+.cache/platformio/
+.pio/
+.pi/verification-evidence/
+.test-output/
