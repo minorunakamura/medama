@@ -9,6 +9,8 @@ struct EyeState {
     float openness = 1.0f;
 };
 
+enum class EyeStyle { Cartoon, Realistic };
+
 class EyeAnimation {
 public:
     static constexpr float gazeLimit = 0.35f;
@@ -16,11 +18,16 @@ public:
     EyeAnimation(std::uint32_t now, std::uint32_t seed);
     void update(std::uint32_t now);
     const EyeState& state() const { return state_; }
+    EyeStyle style() const { return style_; }
+    void toggleStyle() {
+        style_ = style_ == EyeStyle::Cartoon ? EyeStyle::Realistic : EyeStyle::Cartoon;
+    }
 
 private:
     std::uint32_t randomBetween(std::uint32_t minimum, std::uint32_t maximum);
 
     EyeState state_;
+    EyeStyle style_ = EyeStyle::Cartoon;
     std::uint32_t random_;
     std::uint32_t gazeStarted_;
     std::uint32_t gazeDuration_ = 1000;

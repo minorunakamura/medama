@@ -56,6 +56,35 @@ void blinkClosesAndReopensWithinRange() {
     assert(closing && closed && reopening && reopened);
 }
 
+void styleAlternatesWithoutResettingMotion() {
+    EyeAnimation switched(0, 42);
+    EyeAnimation unchanged(0, 42);
+    assert(switched.style() == EyeStyle::Cartoon);
+    bool switchedBackDuringBlink = false;
+    for (std::uint32_t now = 0; now <= 15000; now += 10) {
+        switched.update(now);
+        unchanged.update(now);
+        if (now == 1160) {
+            assert(switched.state().x != 0.0f || switched.state().y != 0.0f);
+            switched.toggleStyle();
+            assert(switched.style() == EyeStyle::Realistic);
+            EyeAnimation restarted(now, 42);
+            assert(restarted.style() == EyeStyle::Cartoon);
+        }
+        if (!switchedBackDuringBlink && unchanged.state().openness == 0.0f) {
+            assert(switched.style() == EyeStyle::Realistic);
+            switched.toggleStyle();
+            assert(switched.style() == EyeStyle::Cartoon);
+            switchedBackDuringBlink = true;
+        }
+        // Also compare future phases and random choices after both switches.
+        assert(switched.state().x == unchanged.state().x);
+        assert(switched.state().y == unchanged.state().y);
+        assert(switched.state().openness == unchanged.state().openness);
+    }
+    assert(switchedBackDuringBlink);
+}
+
 void millisWraparound() {
     const std::uint32_t start = std::numeric_limits<std::uint32_t>::max() - 500;
     EyeAnimation ordinary(0, 73);
@@ -100,6 +129,7 @@ int main() {
     assert(std::hypot(EyeAnimation::gazeLimit, EyeAnimation::gazeLimit) + 0.48f < 1.0f);
     gazeMovesAndHolds();
     blinkClosesAndReopensWithinRange();
+    styleAlternatesWithoutResettingMotion();
     millisWraparound();
     lateFramesRecover();
     std::puts("eye_animation: all assertions passed");
